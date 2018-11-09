@@ -40,6 +40,15 @@
 #define RAM (float) 8 // physical memory in GB available
 /******** END USER CHANGABLE DEFINITIONS   **********/
 
+// Select halo mass function (HMF)
+#define HMF (int) 1 
+// Option to simply switch the HMF used for the overall normalisation
+// Default is to use the Sheth-Tormen correction
+// 0: Press-Schechter
+// 1: Sheth-Tormen
+// 2: Watson FOF (eq. 12 of Watson et al 2013)
+// 3: Watson FOF-z (eq's 12-16 of Watson et al 2013)
+
 #include "ANAL_PARAMS.H"
 #include "HEAT_PARAMS.H"
 #include "../Cosmo_c_files/misc.c"
