@@ -173,7 +173,7 @@ int main(int argc, char ** argv){
   fftwf_complex *M_coll_unfiltered=NULL, *M_coll_filtered=NULL, *deltax_unfiltered=NULL, *deltax_filtered=NULL, *xe_unfiltered=NULL, *xe_filtered=NULL;
   fftwf_complex *N_rec_unfiltered=NULL, *N_rec_filtered=NULL;
   fftwf_plan plan;
-  double global_xH=0, ave_xHI_xrays, ave_den, ST_over_PS, mean_f_coll_st, f_coll, ave_fcoll, dNrec;
+  double global_xH=0, ave_xHI_xrays, ave_den, HMF_over_PS, mean_f_coll, f_coll, ave_fcoll, dNrec;
   const gsl_rng_type * T=NULL;
   gsl_rng * r=NULL;
   double t_ast, dfcolldt, Gamma_R_prefactor, rec;
@@ -292,23 +292,23 @@ int main(int argc, char ** argv){
 
   // compute the mean collpased fraction at this redshift
   if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY){ // New in v2
-	// Here 'mean_f_coll_st' is not the mean collpased fraction, but leave this name as is to simplify the variable name.
-	// Nion_ST * ION_EFF_FACTOR = the mean number of IGM ionizing photon per baryon
+	// Here 'mean_f_coll' is not the mean collpased fraction, but leave this name as is to simplify the variable name.
+	// Nion_General * ION_EFF_FACTOR = the mean number of IGM ionizing photon per baryon
 	// see eq. (17) in Park et al. 2018
-    mean_f_coll_st = Nion_ST(REDSHIFT, M_TURN, ALPHA_STAR, ALPHA_ESC, F_STAR10, F_ESC10, Mlim_Fstar, Mlim_Fesc);
+    mean_f_coll = Nion_General(REDSHIFT, M_TURN, ALPHA_STAR, ALPHA_ESC, F_STAR10, F_ESC10, Mlim_Fstar, Mlim_Fesc);
   }
   else { 
-    mean_f_coll_st = FgtrM_st(REDSHIFT, M_MIN);
+    mean_f_coll = FgtrM_General(REDSHIFT, M_MIN);
   }
 
   /**********  CHECK IF WE ARE IN THE DARK AGES ******************************/
   // lets check if we are going to bother with computing the inhmogeneous field at all...
   global_xH = 0;
-  if ((mean_f_coll_st*ION_EFF_FACTOR < HII_ROUND_ERR)){ // way too small to ionize anything...//New in v2
+  if ((mean_f_coll*ION_EFF_FACTOR < HII_ROUND_ERR)){ // way too small to ionize anything...//New in v2
       fprintf(stderr, "The ST mean collapse fraction is %e, which is much smaller than the effective critical collapse fraction of %e\n \
-                       I will just declare everything to be neutral\n", mean_f_coll_st, 1./ION_EFF_FACTOR);
+                       I will just declare everything to be neutral\n", mean_f_coll, 1./ION_EFF_FACTOR);
       fprintf(LOG, "The ST mean collapse fraction is %e, which is much smaller than the effective critical collapse fraction of %e\n \
-                    I will just declare everything to be neutral\n", mean_f_coll_st, 1./ION_EFF_FACTOR);
+                    I will just declare everything to be neutral\n", mean_f_coll, 1./ION_EFF_FACTOR);
 
       if (USE_TS_IN_21CM){ // use the x_e box to set residuals
 		if(HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY){ // New in v2
@@ -755,12 +755,12 @@ int main(int argc, char ** argv){
       } //  end loop through Fcoll box
 
       f_coll /= (double) HII_TOT_NUM_PIXELS; // ave PS fcoll for this filter scale
-      ST_over_PS = mean_f_coll_st/f_coll; // normalization ratio used to adjust the PS conditional collapsed fraction
+      HMF_over_PS = mean_f_coll/f_coll; // normalization ratio used to adjust the PS conditional collapsed fraction
       fprintf(LOG, "end f_coll normalization if, clock=%06.2f\n", (double)clock()/CLOCKS_PER_SEC);
       fflush(LOG);
 
     
-      //     fprintf(stderr, "Last filter %i, R_filter=%f, fcoll=%f, ST_over_PS=%f, mean normalized fcoll=%f\n", LAST_FILTER_STEP, R, f_coll, ST_over_PS, f_coll*ST_over_PS);
+      //     fprintf(stderr, "Last filter %i, R_filter=%f, fcoll=%f, HMF_over_PS=%f, mean normalized fcoll=%f\n", LAST_FILTER_STEP, R, f_coll, HMF_over_PS, f_coll*HMF_over_PS);
 
     
 
@@ -780,7 +780,7 @@ int main(int argc, char ** argv){
 
 	    density_over_mean = 1.0 + *((float *)deltax_filtered + HII_R_FFT_INDEX(x,y,z));
 
-	    f_coll = ST_over_PS * Fcoll[HII_R_FFT_INDEX(x,y,z)];
+	    f_coll = HMF_over_PS * Fcoll[HII_R_FFT_INDEX(x,y,z)];
 	  
 	    // if this is the last filter step, prepare to account for poisson fluctuations in the sub grid halo number...
 	    // this is very approximate as it doesn't sample the halo mass function but merely samples a number of halos of a characterisic mass

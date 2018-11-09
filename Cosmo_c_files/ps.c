@@ -72,12 +72,12 @@ static double z_val[zpp_interp_points],Nion_z_val[zpp_interp_points]; // For Ts.
 static double z_X_val[zpp_interp_points],SFRD_val[zpp_interp_points]; 
 static gsl_interp_accel *Nion_z_spline_acc;
 static gsl_spline *Nion_z_spline;
-static gsl_interp_accel *SFRD_ST_z_spline_acc;
-static gsl_spline *SFRD_ST_z_spline;
-void initialise_Nion_ST_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Alpha_esc, float Fstar10, float Fesc10);
-void Nion_ST_z(float z, float *splined_value);
-void initialise_SFRD_ST_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Fstar10);
-void SFRD_ST_z(float z, float *splined_value);
+static gsl_interp_accel *SFRD_z_spline_acc;
+static gsl_spline *SFRD_z_spline;
+void initialise_Nion_spline_forTs(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Alpha_esc, float Fstar10, float Fesc10);
+void Nion_z(float z, float *splined_value);
+void initialise_SFRD_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Fstar10);
+void SFRD_z(float z, float *splined_value);
 float *zpp_table;
 double *log10_overdense_low_table, **log10_SFRD_z_low_table;
 float *Overdense_high_table, **SFRD_z_high_table;
@@ -519,6 +519,95 @@ double FgtrM_General(double z, double M){
         exit(-1);
     }
 }
+
+
+double dNion_General(double lnM, void *params){
+    struct parameters_gsl_SFR_int_ vals = *(struct parameters_gsl_SFR_int_ *)params;
+    
+    double M = exp(lnM);
+    double z = vals.z_obs;
+    double MassTurnover = vals.Mdrop;
+    double Alpha_star = vals.pl_star;
+    double Alpha_esc = vals.pl_esc;
+    double Fstar10 = vals.frac_star;
+    double Fesc10 = vals.frac_esc;
+    double Mlim_Fstar = vals.LimitMass_Fstar;
+    double Mlim_Fesc = vals.LimitMass_Fesc;
+    
+    double Fstar, Fesc, MassFunction;
+    
+    if (Alpha_star > 0. && M > Mlim_Fstar)
+        Fstar = 1./Fstar10;
+    else if (Alpha_star < 0. && M < Mlim_Fstar)
+        Fstar = 1/Fstar10;
+    else
+        Fstar = pow(M/1e10,Alpha_star);
+    
+    if (Alpha_esc > 0. && M > Mlim_Fesc)
+        Fesc = 1./Fesc10;
+    else if (Alpha_esc < 0. && M < Mlim_Fesc)
+        Fesc = 1./Fesc10;
+    else
+        Fesc = pow(M/1e10,Alpha_esc);
+    
+    if(HMF==0) {
+        MassFunction = dNdM(z, M);
+    }
+    if(HMF==1) {
+        MassFunction = dNdM_st(z,M);
+    }
+    if(HMF==2) {
+        MassFunction = dNdM_WatsonFOF(z, M);
+    }
+    if(HMF==3) {
+        MassFunction = dNdM_WatsonFOF_z(z, M);
+    }
+    
+    return MassFunction * M * M * exp(-MassTurnover/M) * Fstar * Fesc;
+}
+
+double Nion_General(double z, double MassTurnover, double Alpha_star, double Alpha_esc, double Fstar10, double Fesc10, double Mlim_Fstar, double Mlim_Fesc){
+    
+    double M_Min = MassTurnover/50.;
+    double result, error, lower_limit, upper_limit;
+    gsl_function F;
+    double rel_tol = 0.001; //<- relative tolerance
+    
+    gsl_integration_workspace * w
+    = gsl_integration_workspace_alloc (1000);
+    
+    struct parameters_gsl_SFR_int_ parameters_gsl_SFR = {
+        .z_obs = z,
+        .Mdrop = MassTurnover,
+        .pl_star = Alpha_star,
+        .pl_esc = Alpha_esc,
+        .frac_star = Fstar10,
+        .frac_esc = Fesc10,
+        .LimitMass_Fstar = Mlim_Fstar,
+        .LimitMass_Fesc = Mlim_Fesc,
+    };
+    
+    if(HMF<4 && HMF>-1) {
+        
+        F.function = &dNion_General;
+        F.params = &parameters_gsl_SFR;
+        
+        lower_limit = log(M_Min);
+        upper_limit = log(FMAX(1e16, M_Min*100));
+        
+        gsl_integration_qag (&F, lower_limit, upper_limit, 0, rel_tol, 1000, GSL_INTEG_GAUSS61, w, &result, &error);
+        gsl_integration_workspace_free (w);
+        
+        return result / (OMm*RHOcrit);
+    }
+    else {
+        printf("ERROR: Incorrect HMF selected\n");
+        exit(-1);
+    }
+}
+
+
+
 
 
 
@@ -1632,8 +1721,8 @@ void Nion_Spline_density(float Overdensity, float *splined_value){
 }
 
 // Set up interpolation table for the mean number of IGM ionizing photons per baryon and initialise interploation.
-// compute 'Nion_ST' corresponding to an array of redshift.
-void initialise_Nion_ST_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Alpha_esc, float Fstar10, float Fesc10){
+// compute 'Nion' corresponding to an array of redshift.
+void initialise_Nion_spline_forTs(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Alpha_esc, float Fstar10, float Fesc10){
 	int i;
 	float Mmin = MassTurn/50., Mmax = 1e16;
 	float Mlim_Fstar, Mlim_Fesc;
@@ -1645,38 +1734,38 @@ void initialise_Nion_ST_spline(int Nbin, float zmin, float zmax, float MassTurn,
 	Nion_z_spline = gsl_spline_alloc (gsl_interp_cspline, Nbin);
 	for (i=0; i<Nbin; i++){
 		z_val[i] = zmin + (double)i/((double)Nbin-1.)*(zmax - zmin);
-		Nion_z_val[i] = Nion_ST(z_val[i], MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
+		Nion_z_val[i] = Nion_General(z_val[i], MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
 	}
 	gsl_spline_init(Nion_z_spline, z_val, Nion_z_val, Nbin);
 }
 
-void Nion_ST_z(float z, float *splined_value){
+void Nion_z(float z, float *splined_value){
 	float returned_value;
 
 	returned_value = gsl_spline_eval(Nion_z_spline, z, Nion_z_spline_acc);
 	*splined_value = returned_value;
 }
 
-void initialise_SFRD_ST_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Fstar10){
+void initialise_SFRD_spline(int Nbin, float zmin, float zmax, float MassTurn, float Alpha_star, float Fstar10){
 	int i;
 	float Mmin = MassTurn/50., Mmax = 1e16;
 	float Mlim_Fstar;
 
 	Mlim_Fstar = Mass_limit_bisection(Mmin, Mmax, Alpha_star, Fstar10);
 
-	SFRD_ST_z_spline_acc = gsl_interp_accel_alloc ();
-	SFRD_ST_z_spline = gsl_spline_alloc (gsl_interp_cspline, Nbin);
+	SFRD_z_spline_acc = gsl_interp_accel_alloc ();
+	SFRD_z_spline = gsl_spline_alloc (gsl_interp_cspline, Nbin);
 	for (i=0; i<Nbin; i++){
 		z_X_val[i] = zmin + (double)i/((double)Nbin-1.)*(zmax - zmin);
-		SFRD_val[i] = Nion_ST(z_val[i], MassTurn, Alpha_star, 0., Fstar10, 1.,Mlim_Fstar,0.);
+		SFRD_val[i] = Nion_General(z_X_val[i], MassTurn, Alpha_star, 0., Fstar10, 1.,Mlim_Fstar,0.);
 	}
-	gsl_spline_init(SFRD_ST_z_spline, z_X_val, SFRD_val, Nbin);
+	gsl_spline_init(SFRD_z_spline, z_X_val, SFRD_val, Nbin);
 }
 
-void SFRD_ST_z(float z, float *splined_value){
+void SFRD_z(float z, float *splined_value){
 	float returned_value;
 
-	returned_value = gsl_spline_eval(SFRD_ST_z_spline, z, SFRD_ST_z_spline_acc);
+	returned_value = gsl_spline_eval(SFRD_z_spline, z, SFRD_z_spline_acc);
 	*splined_value = returned_value;
 }
 
@@ -1722,8 +1811,8 @@ void initialise_SFRD_Conditional_table(int Nsteps_zp, int Nfilter, float z[], do
 }
 
 void free_interpolation() {
-    gsl_spline_free (SFRD_ST_z_spline);
-    gsl_interp_accel_free (SFRD_ST_z_spline_acc);
+    gsl_spline_free (SFRD_z_spline);
+    gsl_interp_accel_free (SFRD_z_spline_acc);
     gsl_spline_free (Nion_z_spline);
     gsl_interp_accel_free (Nion_z_spline_acc);
 }
@@ -1736,7 +1825,25 @@ double mean_SFRD_dlnMhalo(double lnM, void *params){
   double z = *(double *)params;
   double M = exp(lnM);
   double f_ast = STELLAR_BARYON_FRAC * pow(M/1.0e10, STELLAR_BARYON_PL);
-  double dndM = dNdM_st(z, M);
+    double dndM;
+    
+    if(HMF==0) {
+        dndM = dNdM(z, M);
+    }
+    else if(HMF==1) {
+        dndM = dNdM_st(z, M);
+    }
+    else if(HMF==2) {
+        dndM = dNdM_WatsonFOF(z, M);
+    }
+    else if(HMF==3) {
+        dndM = dNdM_WatsonFOF_z(z, M);
+    }
+    else {
+        printf("ERROR: Incorrect HMF selected\n");
+        exit(-1);
+    }
+
   if (f_ast > 1)
     f_ast = 1;
 
@@ -1823,8 +1930,8 @@ void initialise_Q_value_spline(int NoRec, float MassTurn, float Alpha_star, floa
       z1 = 1./(a-delta_a) - 1.;
 
 	  // Ionizing emissivity (num of photons per baryon)
-      Nion0 = ION_EFF_FACTOR*Nion_ST(z0, MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
-      Nion1 = ION_EFF_FACTOR*Nion_ST(z1, MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
+      Nion0 = ION_EFF_FACTOR*Nion_General(z0, MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
+      Nion1 = ION_EFF_FACTOR*Nion_General(z1, MassTurn, Alpha_star, Alpha_esc, Fstar10, Fesc10, Mlim_Fstar, Mlim_Fesc);
 
       // With scale factor a, the above equation is written as dQ/da = n_{ion}/da - Q/t_{rec}*(dt/da)
 	  if (NoRec) {

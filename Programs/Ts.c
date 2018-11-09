@@ -115,7 +115,7 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
  time_t start_time, curr_time;
  double J_alpha_threads[NUMCORES], xalpha_threads[NUMCORES], Xheat_threads[NUMCORES],
    Xion_threads[NUMCORES], lower_int_limit;
- float Splined_Nion_ST_zp, Splined_SFRD_ST_zpp,ION_EFF_FACTOR,fcoll; // New in v2
+ float Splined_Nion_zp, Splined_SFRD_zpp,ION_EFF_FACTOR,fcoll; // New in v2
  float zp_table; //New in v2
  int counter,arr_num; // New in v2
  double Luminosity_conversion_factor;
@@ -601,14 +601,14 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
 	}
 
 	/* initialise interpolation of the mean number of IGM ionizing photon per baryon for global reionization.
-	   compute 'Nion_ST' corresponding to an array of redshift. */
-    initialise_Nion_ST_spline(zpp_interp_points,determine_zpp_min, determine_zpp_max, M_TURN, ALPHA_STAR, ALPHA_ESC, F_STAR10, F_ESC10);
-    printf("\n Completed initialise Nion_ST, Time = %06.2f min \n",(double)clock()/CLOCKS_PER_SEC/60.0);
+	   compute 'Nion' corresponding to an array of redshift. */
+    initialise_Nion_spline_forTs(zpp_interp_points,determine_zpp_min, determine_zpp_max, M_TURN, ALPHA_STAR, ALPHA_ESC, F_STAR10, F_ESC10);
+    printf("\n Completed initialise Nion, Time = %06.2f min \n",(double)clock()/CLOCKS_PER_SEC/60.0);
 	
 	/* initialise interpolation of the mean SFRD.
-	   compute 'Nion_ST' corresponding to an array of redshift, but assume f_{esc10} = 1 and \alpha_{esc} = 0. */
-    initialise_SFRD_ST_spline(zpp_interp_points,determine_zpp_min, determine_zpp_max, M_TURN, ALPHA_STAR, F_STAR10);
-    printf("\n Completed initialise SFRD using Sheth-Tormen halo mass function, Time = %06.2f min \n",(double)clock()/CLOCKS_PER_SEC/60.0);
+	   compute 'Nion' corresponding to an array of redshift, but assume f_{esc10} = 1 and \alpha_{esc} = 0. */
+    initialise_SFRD_spline(zpp_interp_points,determine_zpp_min, determine_zpp_max, M_TURN, ALPHA_STAR, F_STAR10);
+    printf("\n Completed initialise SFRD, Time = %06.2f min \n",(double)clock()/CLOCKS_PER_SEC/60.0);
 	
 	// initialise redshift table corresponding to all the redshifts to initialise interpolation for the conditional mass function.
     zp_table = zp;
@@ -664,8 +664,8 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
 
     // check if we are in the really high z regime before the first stars..
 	if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY) { // New in v2
-	  Nion_ST_z(zp,&(Splined_Nion_ST_zp));
-      if ( Splined_Nion_ST_zp < 1e-15 )
+	  Nion_z(zp,&(Splined_Nion_zp));
+      if ( Splined_Nion_zp < 1e-15 )
         NO_LIGHT = 1;
       else
         NO_LIGHT = 0;
@@ -679,10 +679,10 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
 
 	//New in v2
 	if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY) {
-	  filling_factor_of_HI_zp = 1 - ION_EFF_FACTOR * Splined_Nion_ST_zp / (1.0 - x_e_ave); // fcoll including f_esc
+	  filling_factor_of_HI_zp = 1 - ION_EFF_FACTOR * Splined_Nion_zp / (1.0 - x_e_ave); // fcoll including f_esc
 	}
 	else {
-	  filling_factor_of_HI_zp = 1 - HII_EFF_FACTOR * FgtrM_st(zp, M_MIN) / (1.0 - x_e_ave);
+	  filling_factor_of_HI_zp = 1 - HII_EFF_FACTOR * FgtrM_General(zp, M_MIN) / (1.0 - x_e_ave);
 	}
 
     if (filling_factor_of_HI_zp > 1) filling_factor_of_HI_zp=1;
@@ -756,26 +756,26 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
       fcoll_R /= (double) sample_ct;
 
 	  if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY) {// New in v2
-	    SFRD_ST_z(zpp,&(Splined_SFRD_ST_zpp));
-	    ST_over_PS[R_ct] = Splined_SFRD_ST_zpp / fcoll_R; 
+	    SFRD_z(zpp,&(Splined_SFRD_zpp));
+	    HMF_over_PS[R_ct] = Splined_SFRD_zpp / fcoll_R;
 	  }
 	  else {
-        ST_over_PS[R_ct] = FgtrM_st(zpp, M_MIN) / fcoll_R;
+        HMF_over_PS[R_ct] = FgtrM_General(zpp, M_MIN) / fcoll_R;
 	  }
 
       if (DEBUG_ON){
 	    if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY) {
-      printf("ST/PS=%g, mean_ST=%g, mean_ps=%g\n, ratios of mean=%g\n", ST_over_PS[R_ct], 
-		 Splined_SFRD_ST_zpp,
+      printf("HMF/PS=%g, mean=%g, mean_ps=%g\n, ratios of mean=%g\n", HMF_over_PS[R_ct],
+		 Splined_SFRD_zpp,
 	     FgtrM(zpp, M_MIN),
-	     Splined_SFRD_ST_zpp/FgtrM(zpp, M_MIN)
+	     Splined_SFRD_zpp/FgtrM(zpp, M_MIN)
 	     );
 		}
 		else {
-      printf("ST/PS=%g, mean_ST=%g, mean_ps=%g\n, ratios of mean=%g\n", ST_over_PS[R_ct], 
-	     FgtrM_st(zpp, M_MIN), 
+      printf("HMF/PS=%g, mean=%g, mean_ps=%g\n, ratios of mean=%g\n", HMF_over_PS[R_ct],
+	     FgtrM_General(zpp, M_MIN),
 	     FgtrM(zpp, M_MIN),
-	     FgtrM_st(zpp, M_MIN)/FgtrM(zpp, M_MIN)
+	     FgtrM_General(zpp, M_MIN)/FgtrM(zpp, M_MIN)
 	     );
 		}
       }
@@ -843,7 +843,7 @@ double freq_int_heat[NUM_FILTER_STEPS_FOR_Ts], freq_int_ion[NUM_FILTER_STEPS_FOR
     for (ct=0; ct<NUMCORES; ct++)
       J_alpha_threads[ct] = xalpha_threads[ct] = Xheat_threads[ct] = Xion_threads[ct] = 0;
     /***************  PARALLELIZED LOOP ******************************************************************/
-#pragma omp parallel shared(COMPUTE_Ts, Tk_box, x_e_box, x_e_ave, delNL0, freq_int_heat_tbl, freq_int_ion_tbl, freq_int_lya_tbl, zp, dzp, Ts, x_int_XHII, x_int_Energy, x_int_fheat, x_int_n_Lya, x_int_nion_HI, x_int_nion_HeI, x_int_nion_HeII, growth_factor_zp, dgrowth_factor_dzp, NO_LIGHT, zpp_edge, sigma_atR, sigma_Tmin, ST_over_PS, sum_lyn, const_zp_prefactor, M_MIN_at_z, M_MIN_at_zp, dt_dzp, J_alpha_threads, xalpha_threads, Xheat_threads, Xion_threads) private(box_ct, ans, xHII_call, R_ct, curr_delNL0, m_xHII_low, m_xHII_high, freq_int_heat, freq_int_ion, freq_int_lya, dansdz, J_alpha_tot, curr_xalpha)
+#pragma omp parallel shared(COMPUTE_Ts, Tk_box, x_e_box, x_e_ave, delNL0, freq_int_heat_tbl, freq_int_ion_tbl, freq_int_lya_tbl, zp, dzp, Ts, x_int_XHII, x_int_Energy, x_int_fheat, x_int_n_Lya, x_int_nion_HI, x_int_nion_HeI, x_int_nion_HeII, growth_factor_zp, dgrowth_factor_dzp, NO_LIGHT, zpp_edge, sigma_atR, sigma_Tmin, HMF_over_PS, sum_lyn, const_zp_prefactor, M_MIN_at_z, M_MIN_at_zp, dt_dzp, J_alpha_threads, xalpha_threads, Xheat_threads, Xion_threads) private(box_ct, ans, xHII_call, R_ct, curr_delNL0, m_xHII_low, m_xHII_high, freq_int_heat, freq_int_ion, freq_int_lya, dansdz, J_alpha_tot, curr_xalpha)
     {
 #pragma omp for
       

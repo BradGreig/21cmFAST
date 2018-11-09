@@ -11,7 +11,7 @@
 #define KAPPA_10_pH_NPTS (int) 17
 
 /* Define some global variables; yeah i know it isn't "good practice" but doesn't matter */
-double zpp_edge[NUM_FILTER_STEPS_FOR_Ts], sigma_atR[NUM_FILTER_STEPS_FOR_Ts], sigma_Tmin[NUM_FILTER_STEPS_FOR_Ts], ST_over_PS[NUM_FILTER_STEPS_FOR_Ts], sum_lyn[NUM_FILTER_STEPS_FOR_Ts], R_values[NUM_FILTER_STEPS_FOR_Ts];
+double zpp_edge[NUM_FILTER_STEPS_FOR_Ts], sigma_atR[NUM_FILTER_STEPS_FOR_Ts], sigma_Tmin[NUM_FILTER_STEPS_FOR_Ts], HMF_over_PS[NUM_FILTER_STEPS_FOR_Ts], sum_lyn[NUM_FILTER_STEPS_FOR_Ts], R_values[NUM_FILTER_STEPS_FOR_Ts];
 unsigned long long box_ct;
 double const_zp_prefactor, dt_dzp, x_e_ave;
 double growth_factor_zp, dgrowth_factor_dzp, PS_ION_EFF;
@@ -359,11 +359,11 @@ void evolveInt(float zp, float curr_delNL0[], double freq_int_heat[],
 		This is the same parameter with 't_STAR' (defined in ANAL_PARAMS.H).
 		If turn the new parametrization on, this is a free parameter.
 		*/
-	  dfcoll = ST_over_PS[zpp_ct]*(double)fcoll*hubble(zpp)/T_AST*fabs(dtdz(zpp))*fabs(dzpp);
+	  dfcoll = HMF_over_PS[zpp_ct]*(double)fcoll*hubble(zpp)/T_AST*fabs(dtdz(zpp))*fabs(dzpp);
 	}
 	else {
       dfcoll = dfcoll_dz(zpp, sigma_Tmin[zpp_ct], curr_delNL0[zpp_ct], sigma_atR[zpp_ct]);
-      dfcoll *= ST_over_PS[zpp_ct] * dzpp; // this is now a positive quantity
+      dfcoll *= HMF_over_PS[zpp_ct] * dzpp; // this is now a positive quantity
 	}
     zpp_integrand = dfcoll * (1+curr_delNL0[zpp_ct]*dicke(zpp)) * pow(1+zpp, -X_RAY_SPEC_INDEX);
 
@@ -593,7 +593,7 @@ double tauX_integrand(double zhat, void *params){
   nuhat = p->nu_0 * (1+zhat);
   // New in v2
   if (HALO_MASS_DEPENDENT_IONIZING_EFFICIENCY) {
-	Nion_ST_z(zhat,&(Splined_ans));
+	Nion_z(zhat,&(Splined_ans));
 	fcoll = Splined_ans;
   }
   else {
