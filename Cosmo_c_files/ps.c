@@ -132,8 +132,10 @@ void splint(float xa[], float ya[], float y2a[], int n, float x, float *y);
 
 void gauleg(float x1, float x2, float x[], float w[], int n);
 
-double FgtrlnM_general(double lnM, void *params);
-double FgtrM_general(float z, float M1, float M_Max, float M2, float MFeedback, float alpha, float delta1, float delta2);
+//double FgtrlnM_general(double lnM, void *params);
+//double FgtrM_general(float z, float M1, float M_Max, float M2, float MFeedback, float alpha, float delta1, float delta2);
+double FgtrM_General(double z, double M);
+
 
 float FgtrConditionalM_second(float z, float M1, float M2, float MFeedback, float alpha, float delta1, float delta2);
 float dNdM_conditional_second(float z, float M1, float M2, float delta1, float delta2);
@@ -171,6 +173,8 @@ double MtoR(double); /* R in Mpc, M in Msun */
 double M_J_WDM(); /* returns the "effective Jeans mass" corresponding to the gas analog of WDM ; eq. 10 in BHO 2001 */
 double sheth_delc(double del, double sig);
 double dNdM_st(double z, double M);
+double dNdM_WatsonFOF(double z, double M);
+double dNdM_WatsonFOF_z(double z, double M);
 double dNdM(double z, double M);
 double dnbiasdM(double M, float z, double M_o, float del_o); /* dnbiasdM */
 double FgtrM(double z, double M);  //calculates the fraction of mass contained in haloes with mass > M at redshift z
@@ -345,6 +349,65 @@ double dNdM_st(double z, double M){
   nuhat = sqrt(SHETH_a) * Deltac / sigma;
   
   return (-OMm*RHOcrit/M) * (dsigmadm/sigma) * sqrt(2/PI)*SHETH_A * (1+ pow(nuhat, -2*SHETH_p)) * nuhat * pow(E, -nuhat*nuhat/2.0);
+}
+
+
+
+
+/*
+ FUNCTION dNdM_WatsonFOF(z, M)
+ Computes the Press_schechter mass function with Warren et al. 2011 correction for ellipsoidal collapse at
+ redshift z, and dark matter halo mass M (in solar masses).
+ 
+ The Universial FOF function (Eq. 12) of Watson et al. 2013
+ 
+ The return value is the number density per unit mass of halos in the mass range M to M+dM in units of:
+ comoving Mpc^-3 Msun^-1
+ 
+ Reference: Watson et al. 2013
+ */
+double dNdM_WatsonFOF(double z, double M){
+    
+    double sigma, dsigmadm, dicke_growth, f_sigma;
+    
+    dicke_growth = dicke(z);
+    sigma = sigma_z0(M) * dicke_growth;
+    dsigmadm = dsigmasqdm_z0(M) * dicke_growth*dicke_growth/(2.0*sigma);
+    
+    f_sigma = Watson_A * ( pow( Watson_beta/sigma, Watson_alpha) + 1. ) * exp( - Watson_gamma/(sigma*sigma) );
+    
+    return (-OMm*RHOcrit/M) * (dsigmadm/sigma) * f_sigma;
+}
+
+/*
+ FUNCTION dNdM_WatsonFOF_z(z, M)
+ Computes the Press_schechter mass function with Warren et al. 2011 correction for ellipsoidal collapse at
+ redshift z, and dark matter halo mass M (in solar masses).
+ 
+ The Universial FOF function, with redshift evolution (Eq. 12 - 15) of Watson et al. 2013.
+ 
+ The return value is the number density per unit mass of halos in the mass range M to M+dM in units of:
+ comoving Mpc^-3 Msun^-1
+ 
+ Reference: Watson et al. 2013
+ */
+double dNdM_WatsonFOF_z(double z, double M){
+    
+    double sigma, dsigmadm, dicke_growth, A_z, alpha_z, beta_z, Omega_m_z, f_sigma;
+
+    dicke_growth = dicke(z);
+    sigma = sigma_z0(M) * dicke_growth;
+    dsigmadm = dsigmasqdm_z0(M) * dicke_growth*dicke_growth/(2.0*sigma);
+    
+    Omega_m_z = OMm*pow(1.+z,3.) / ( OMl + OMm*pow(1.+z,3.) + OMr*pow(1.+z,4.) );
+    
+    A_z = Omega_m_z * ( Watson_A_z_1 * pow(1. + z, Watson_A_z_2 ) + Watson_A_z_3 );
+    alpha_z = Omega_m_z * ( Watson_alpha_z_1 * pow(1.+z, Watson_alpha_z_2 ) + Watson_alpha_z_3 );
+    beta_z = Omega_m_z * ( Watson_beta_z_1 * pow(1.+z, Watson_beta_z_2 ) + Watson_beta_z_3 );
+    
+    f_sigma = A_z * ( pow(beta_z/sigma, alpha_z) + 1. ) * exp( - Watson_gamma_z/(sigma*sigma) );
+    
+    return (-OMm*RHOcrit/M) * (dsigmadm/sigma) * f_sigma;
 }
 
 
