@@ -463,6 +463,66 @@ double FgtrM_st(double z, double M){
 }
 
 
+
+
+
+
+double dFdlnM_General(double lnM, void *params){
+    double z = *(double *)params;
+    double M = exp(lnM);
+    
+    double MassFunction;
+    
+    if(HMF==0) {
+        MassFunction = dNdM(z, M);
+    }
+    if(HMF==1) {
+        MassFunction = dNdM_st(z, M);
+    }
+    if(HMF==2) {
+        MassFunction = dNdM_WatsonFOF(z, M);
+    }
+    if(HMF==3) {
+        MassFunction = dNdM_WatsonFOF_z(z, M);
+    }
+    return MassFunction * M * M;
+}
+
+/*
+ FUNCTION FgtrM_General(z, M)
+ Computes the fraction of mass contained in haloes with mass > M at redshift z
+ */
+double FgtrM_General(double z, double M){
+    
+    if(HMF<4 && HMF>-1) {
+        
+        double result, error, lower_limit, upper_limit;
+        gsl_function F;
+        double rel_tol  = 0.001; //<- relative tolerance
+        gsl_integration_workspace * w
+        = gsl_integration_workspace_alloc (1000);
+        
+        F.function = &dFdlnM_General;
+        F.params = &z;
+        
+        lower_limit = log(M);
+        upper_limit = log(FMAX(1e16, M*100));
+        
+        gsl_integration_qag (&F, lower_limit, upper_limit, 0, rel_tol,1000, GSL_INTEG_GAUSS61, w, &result, &error);
+        
+        gsl_integration_workspace_free (w);
+        
+        return result / (OMm*RHOcrit);
+    }
+    else {
+        printf("ERROR: Incorrect HMF selected\n");
+        exit(-1);
+    }
+}
+
+
+
+
 /*
   FUNCTION FgtrM(z, M)
   Computes the fraction of mass contained in haloes with mass > M at redshift z
